@@ -1,0 +1,1197 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Pet Trong Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #f4f4f4;
+            transition: font-size 0.3s, text-transform 0.3s;
+        }
+        body.font-size-14 { font-size: 14px; }
+        body.font-size-16 { font-size: 16px; }
+        body.font-size-18 { font-size: 18px; }
+        body.uppercase-text { text-transform: uppercase; }
+        body.layout-default { display: block; }
+        body.layout-two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+            margin: 10px 0;
+        }
+        .custom-settings-button {
+            display: inline-block;
+            margin: 5px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .custom-settings-button:hover {
+            background-color: #c82333;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .modal-content h2 {
+            margin: 0;
+            font-size: 1.5em;
+            color: #007bff;
+            text-align: center;
+        }
+        .modal-content .section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .modal-content .section h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+            color: #333;
+        }
+        .modal-content .action-buttons {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .modal-content .reset-size-button, .modal-content .close-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            text-align: center;
+            flex: 1;
+        }
+        .modal-content .reset-size-button:hover {
+            background-color: #0069d9;
+        }
+        .modal-content .close-button {
+            background-color: #dc3545;
+        }
+        .modal-content .close-button:hover {
+            background-color: #c82333;
+        }
+        .custom-settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .custom-settings-form .size-settings, 
+        .custom-settings-form .options-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .custom-settings-form .gen-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+        }
+        @media (max-width: 400px) {
+            .custom-settings-form .gen-checkboxes {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        .custom-settings-form label {
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .custom-settings-form input[type="range"] {
+            width: 120px;
+            margin: 5px 0;
+        }
+        .custom-settings-form .slider-value {
+            display: inline-block;
+            width: 50px;
+            text-align: left;
+            margin-left: 10px;
+        }
+        .custom-settings-form select {
+            width: 120px;
+            padding: 5px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .custom-settings-form input[type="checkbox"] {
+            margin: 0 5px 0 0;
+        }
+        .stats-container, .pet-grid {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: auto;
+        }
+        table.table-padding-5 th, table.table-padding-5 td {
+            padding: 5px;
+        }
+        table.table-padding-10 th, table.table-padding-10 td {
+            padding: 10px;
+        }
+        table.table-padding-15 th, table.table-padding-15 td {
+            padding: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            text-align: center;
+            min-width: 60px;
+        }
+        th.resize-column {
+            resize: horizontal;
+            overflow: auto;
+            cursor: col-resize;
+        }
+        th.no-resize-column {
+            cursor: default;
+        }
+        tr.resize-row {
+            min-height: 40px;
+            cursor: row-resize;
+            position: relative;
+        }
+        tr.no-resize-row {
+            min-height: 40px;
+            cursor: default;
+        }
+        input[type="number"] {
+            padding: 5px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        input[type="number"].input-width-40 { width: 40px; }
+        input[type="number"].input-width-45 { width: 45px; }
+        input[type="number"].input-width-50 { width: 50px; }
+        input[type="number"].input-width-55 { width: 55px; }
+        input[type="number"].input-width-60 { width: 60px; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            opacity: 1;
+            transition: all 0.3s;
+        }
+        input[type="number"].arrow-size-10::-webkit-inner-spin-button,
+        input[type="number"].arrow-size-10::-webkit-outer-spin-button {
+            width: 10px;
+            height: 10px;
+        }
+        input[type="number"].arrow-size-12::-webkit-inner-spin-button,
+        input[type="number"].arrow-size-12::-webkit-outer-spin-button {
+            width: 12px;
+            height: 12px;
+        }
+        input[type="number"].arrow-size-14::-webkit-inner-spin-button,
+        input[type="number"].arrow-size-14::-webkit-outer-spin-button {
+            width: 14px;
+            height: 14px;
+        }
+        input[type="number"].no-arrows::-webkit-inner-spin-button,
+        input[type="number"].no-arrows::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"].no-arrows {
+            -moz-appearance: textfield;
+        }
+        .pet-grid h2, .stats-container h2 {
+            margin-top: 0;
+            font-size: 1.5em;
+            color: #007bff;
+        }
+        .comparison-male {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .comparison-female {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .comparison-equal {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .prediction-male {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .prediction-female {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .prediction-equal {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .delete-form {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .delete-form label {
+            margin-right: 5px;
+        }
+        .delete-form select {
+            width: 100px;
+            padding: 5px;
+            margin: 5px;
+            border-radius: 4px;
+        }
+        .delete-form input[type="number"] {
+            padding: 5px;
+            margin: 5px;
+        }
+        .delete-form button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .delete-form button:hover {
+            background-color: #c82333;
+        }
+        .save-button, .export-button, .import-button {
+            display: inline-block;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .save-button:hover, .export-button:hover, .import-button:hover {
+            background-color: #0069d9;
+        }
+        .import-container {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        details {
+            margin-top: 10px;
+        }
+        summary {
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .toggle-gen0, .toggle-quality {
+            margin: 5px 0;
+            text-align: center;
+        }
+        .gen0-column { display: table-cell; }
+        .gen0-hidden { display: none; }
+        .sr-column { display: table-cell; }
+        .sr-hidden { display: none; }
+        .ssr-column { display: table-cell; }
+        .ssr-hidden { display: none; }
+        .prediction-column { display: table-cell; }
+        .prediction-hidden { display: none; }
+        .quantity-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .quantity-control button {
+            width: 30px;
+            height: 30px;
+            font-size: 18px;
+            line-height: 18px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .quantity-control button:hover {
+            background-color: #0069d9;
+        }
+        .quantity-control input[type="number"] {
+            margin: 0;
+        }
+        .resize-handle-row {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: transparent;
+            cursor: row-resize;
+        }
+    </style>
+</head>
+<body class="font-size-16 layout-default">
+    <h1>Quản Lý Pet Trong Game</h1>
+
+    <!-- Tổng hợp và thống kê -->
+    <div class="stats-container">
+        <h2>Tổng Kho & Thống Kê</h2>
+        <div class="toggle-gen0">
+            <label><input type="checkbox" id="toggleGen0" checked onchange="toggleGen0Column()"> Hiển thị cột Gen 0</label>
+            <label><input type="checkbox" id="togglePrediction" checked onchange="togglePredictionColumns()"> Hiển thị cột dự đoán</label>
+        </div>
+        <div class="table-container">
+            <table id="statsTable" class="table-padding-10">
+                <thead>
+                    <tr class="resize-row">
+                        <th class="resize-column">Phẩm chất</th>
+                        <th class="gen0-column resize-column">Gen 0</th>
+                        <th class="resize-column">Đực</th>
+                        <th class="resize-column">Cái</th>
+                        <th class="resize-column">Tổng</th>
+                        <th class="resize-column">So sánh Đực/Cái</th>
+                        <th class="prediction-column resize-column">Dự đoán</th>
+                        <div class="resize-handle-row"></div>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="resize-row">
+                        <td>SR</td>
+                        <td id="gen0_SR" class="gen0-column">0</td>
+                        <td id="total_SR_male">0</td>
+                        <td id="total_SR_female">0</td>
+                        <td id="total_SR">0</td>
+                        <td id="total_SR_comparison" class="comparison-equal">Bằng nhau</td>
+                        <td id="total_SR_prediction" class="prediction-column prediction-equal">HÊN XUI</td>
+                        <div class="resize-handle-row"></div>
+                    </tr>
+                    <tr class="resize-row">
+                        <td>SSR</td>
+                        <td id="gen0_SSR" class="gen0-column">0</td>
+                        <td id="total_SSR_male">0</td>
+                        <td id="total_SSR_female">0</td>
+                        <td id="total_SSR">0</td>
+                        <td id="total_SSR_comparison" class="comparison-equal">Bằng nhau</td>
+                        <td id="total_SSR_prediction" class="prediction-column prediction-equal">HÊN XUI</td>
+                        <div class="resize-handle-row"></div>
+                    </tr>
+                    <tr class="resize-row">
+                        <td>Tổng cộng</td>
+                        <td id="gen0_total" class="gen0-column">0</td>
+                        <td id="total_male">0</td>
+                        <td id="total_female">0</td>
+                        <td id="total_all">0</td>
+                        <td id="total_comparison" class="comparison-equal">Bằng nhau</td>
+                        <td id="total_prediction" class="prediction-column prediction-equal">HÊN XUI</td>
+                        <div class="resize-handle-row"></div>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Egg Pet Grid -->
+    <div class="pet-grid">
+        <h2>Egg Pet (Gen 0-10)</h2>
+        <div class="toggle-quality">
+            <label><input type="checkbox" id="toggleSREggPet" checked onchange="toggleQualityColumns()"> Hiển thị SR</label>
+            <label><input type="checkbox" id="toggleSSREggPet" checked onchange="toggleQualityColumns()"> Hiển thị SSR</label>
+        </div>
+        <div class="table-container">
+            <table id="eggGen0To10" class="table-padding-10">
+                <thead>
+                    <tr class="resize-row">
+                        <th class="resize-column">Gen</th>
+                        <th class="sr-column resize-column">SR Đực</th>
+                        <th class="sr-column resize-column">SR Cái</th>
+                        <th class="ssr-column resize-column">SSR Đực</th>
+                        <th class="ssr-column resize-column">SSR Cái</th>
+                        <th class="sr-column resize-column">So sánh SR</th>
+                        <th class="ssr-column resize-column">So sánh SSR</th>
+                        <div class="resize-handle-row"></div>
+                    </tr>
+                </thead>
+                <tbody id="eggPetTableBody">
+                    <!-- Gen 0-10 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Form xóa pet -->
+    <details>
+        <summary>Hiển thị Form Xóa Pet</summary>
+        <div class="delete-form">
+            <h2>Xóa Pet</h2>
+            <label>Phẩm chất:</label>
+            <select id="delete_quality">
+                <option value="SR">SR</option>
+                <option value="SSR">SSR</option>
+            </select>
+            <label>Giới tính:</label>
+            <select id="delete_gender">
+                <option value="Đực">Đực</option>
+                <option value="Cái">Cái</option>
+            </select>
+            <label>Gen:</label>
+            <input type="number" id="delete_gen" min="0" max="10" value="0" class="input-width-50 arrow-size-12">
+            <label>Số lượng xóa:</label>
+            <input type="number" id="delete_quantity" min="1" value="1" class="input-width-50 arrow-size-12">
+            <button onclick="deletePet()">Xóa</button>
+        </div>
+    </details>
+
+    <!-- Nút lưu, xuất, nhập và tùy chỉnh -->
+    <div class="import-container">
+        <button class="save-button" onclick="savePets()">Lưu Dữ Liệu</button>
+        <button class="export-button" onclick="exportToExcel()">Xuất ra Excel</button>
+        <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="display: none;" onchange="importFromExcel(this.files[0])">
+        <button class="import-button" onclick="document.getElementById('importFile').click()">Nhập từ Excel</button>
+        <button class="custom-settings-button" onclick="openCustomSettingsModal()">Tùy chỉnh giao diện</button>
+    </div>
+
+    <!-- Popup tùy chỉnh -->
+    <div id="customSettingsModal" class="modal">
+        <div class="modal-content">
+            <h2>Tùy chỉnh giao diện</h2>
+            <div class="custom-settings-form">
+                <div class="section size-settings">
+                    <h3>Kích thước</h3>
+                    <div>
+                        <label>Kích thước chữ:</label>
+                        <input type="range" id="fontSizeSelect" min="14" max="18" step="2" value="16" oninput="updateCustomSettings()">
+                        <span class="slider-value" id="fontSizeValue">16px</span>
+                    </div>
+                    <div>
+                        <label>Kích thước bảng:</label>
+                        <input type="range" id="tablePaddingSelect" min="5" max="15" step="5" value="10" oninput="updateCustomSettings()">
+                        <span class="slider-value" id="tablePaddingValue">10px</span>
+                    </div>
+                    <div>
+                        <label>Kích thước mũi tên:</label>
+                        <input type="range" id="arrowSizeSelect" min="10" max="14" step="2" value="12" oninput="updateCustomSettings()">
+                        <span class="slider-value" id="arrowSizeValue">12px</span>
+                    </div>
+                    <div>
+                        <label>Kích thước ô nhập liệu:</label>
+                        <input type="range" id="inputWidthSelect" min="40" max="60" step="5" value="50" oninput="updateCustomSettings()">
+                        <span class="slider-value" id="inputWidthValue">50px</span>
+                    </div>
+                </div>
+                <div class="section options-settings">
+                    <h3>Tùy chọn giao diện</h3>
+                    <label><input type="checkbox" id="uppercaseText" onchange="updateCustomSettings()"> Viết hoa chữ</label>
+                    <label><input type="checkbox" id="showArrows" checked onchange="updateCustomSettings()"> Hiển thị mũi tên tăng/giảm</label>
+                    <label><input type="checkbox" id="resizeColumns" checked onchange="updateCustomSettings()"> Cho phép co giãn cột</label>
+                    <label><input type="checkbox" id="resizeRows" checked onchange="updateCustomSettings()"> Cho phép co giãn hàng</label>
+                    <div>
+                        <label>Bố cục:</label>
+                        <select id="layoutSelect" onchange="updateCustomSettings()">
+                            <option value="default" selected>Mặc định</option>
+                            <option value="two-columns">Cột đôi</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="section gen-checkboxes">
+                    <h3>Ẩn Gen không dùng</h3>
+                    <label><input type="checkbox" id="hideGen1" onchange="updateCustomSettings()"> Gen 1</label>
+                    <label><input type="checkbox" id="hideGen2" onchange="updateCustomSettings()"> Gen 2</label>
+                    <label><input type="checkbox" id="hideGen3" onchange="updateCustomSettings()"> Gen 3</label>
+                    <label><input type="checkbox" id="hideGen4" onchange="updateCustomSettings()"> Gen 4</label>
+                    <label><input type="checkbox" id="hideGen5" onchange="updateCustomSettings()"> Gen 5</label>
+                    <label><input type="checkbox" id="hideGen6" onchange="updateCustomSettings()"> Gen 6</label>
+                    <label><input type="checkbox" id="hideGen7" onchange="updateCustomSettings()"> Gen 7</label>
+                    <label><input type="checkbox" id="hideGen8" onchange="updateCustomSettings()"> Gen 8</label>
+                    <label><input type="checkbox" id="hideGen9" onchange="updateCustomSettings()"> Gen 9</label>
+                    <label><input type="checkbox" id="hideGen10" onchange="updateCustomSettings()"> Gen 10</label>
+                </div>
+                <div class="action-buttons">
+                    <button class="reset-size-button" onclick="resetTableSizes()">Reset kích thước hàng/cột</button>
+                    <button class="close-button" onclick="closeCustomSettingsModal()">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pets = [];
+        for (let gen = 0; gen <= 10; gen++) {
+            ['SR', 'SSR'].forEach(quality => {
+                ['Đực', 'Cái'].forEach(gender => {
+                    pets.push({ type: 'Egg Pet', quality, gender, gen, quantity: 0 });
+                });
+            });
+        }
+
+        function openCustomSettingsModal() {
+            document.getElementById('customSettingsModal').style.display = 'block';
+        }
+
+        function closeCustomSettingsModal() {
+            document.getElementById('customSettingsModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('customSettingsModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        function resetTableSizes() {
+            try {
+                const settings = JSON.parse(localStorage.getItem('customSettings') || '{}');
+                settings.columnWidths = {};
+                settings.rowHeights = {};
+                localStorage.setItem('customSettings', JSON.stringify(settings));
+                document.querySelectorAll('table th').forEach(th => {
+                    th.style.width = '100px';
+                });
+                document.querySelectorAll('table tr').forEach(tr => {
+                    tr.style.height = '40px';
+                });
+                updateCustomSettings();
+                alert('Đã reset kích thước hàng và cột về mặc định!');
+            } catch (error) {
+                console.error('Lỗi trong resetTableSizes:', error);
+                alert('Đã xảy ra lỗi khi reset kích thước. Vui lòng thử lại!');
+            }
+        }
+
+        function saveCustomSettings() {
+            try {
+                const settings = {
+                    fontSize: document.getElementById('fontSizeSelect').value,
+                    tablePadding: document.getElementById('tablePaddingSelect').value,
+                    arrowSize: document.getElementById('arrowSizeSelect').value,
+                    inputWidth: document.getElementById('inputWidthSelect').value,
+                    uppercaseText: document.getElementById('uppercaseText').checked,
+                    layout: document.getElementById('layoutSelect').value,
+                    showArrows: document.getElementById('showArrows').checked,
+                    resizeColumns: document.getElementById('resizeColumns').checked,
+                    resizeRows: document.getElementById('resizeRows').checked,
+                    hiddenGens: [],
+                    toggleGen0: document.getElementById('toggleGen0').checked,
+                    togglePrediction: document.getElementById('togglePrediction').checked,
+                    toggleSREggPet: document.getElementById('toggleSREggPet').checked,
+                    toggleSSREggPet: document.getElementById('toggleSSREggPet').checked,
+                    columnWidths: {},
+                    rowHeights: {}
+                };
+                for (let i = 1; i <= 10; i++) {
+                    if (document.getElementById(`hideGen${i}`).checked) {
+                        settings.hiddenGens.push(i);
+                    }
+                }
+                document.querySelectorAll('table th').forEach((th, index) => {
+                    settings.columnWidths[`col_${index}`] = th.offsetWidth;
+                });
+                document.querySelectorAll('table tr').forEach((tr, index) => {
+                    settings.rowHeights[`row_${index}`] = tr.offsetHeight;
+                });
+                localStorage.setItem('customSettings', JSON.stringify(settings));
+            } catch (error) {
+                console.error('Lỗi trong saveCustomSettings:', error);
+                alert('Đã xảy ra lỗi khi lưu tùy chỉnh giao diện. Vui lòng thử lại!');
+            }
+        }
+
+        function loadCustomSettings() {
+            try {
+                const savedSettings = localStorage.getItem('customSettings');
+                let hiddenGens = [];
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    document.getElementById('fontSizeSelect').value = settings.fontSize || '16';
+                    document.getElementById('tablePaddingSelect').value = settings.tablePadding || '10';
+                    document.getElementById('arrowSizeSelect').value = settings.arrowSize || '12';
+                    document.getElementById('inputWidthSelect').value = settings.inputWidth || '50';
+                    document.getElementById('uppercaseText').checked = settings.uppercaseText || false;
+                    document.getElementById('layoutSelect').value = settings.layout || 'default';
+                    document.getElementById('showArrows').checked = settings.showArrows !== false;
+                    document.getElementById('resizeColumns').checked = settings.resizeColumns !== false;
+                    document.getElementById('resizeRows').checked = settings.resizeRows !== false;
+                    for (let i = 1; i <= 10; i++) {
+                        document.getElementById(`hideGen${i}`).checked = settings.hiddenGens ? settings.hiddenGens.includes(i) : false;
+                        if (settings.hiddenGens && settings.hiddenGens.includes(i)) {
+                            hiddenGens.push(i);
+                        }
+                    }
+                    document.getElementById('toggleGen0').checked = settings.toggleGen0 !== false;
+                    document.getElementById('togglePrediction').checked = settings.togglePrediction !== false;
+                    document.getElementById('toggleSREggPet').checked = settings.toggleSREggPet !== false;
+                    document.getElementById('toggleSSREggPet').checked = settings.toggleSSREggPet !== false;
+                    if (settings.columnWidths) {
+                        document.querySelectorAll('table th').forEach((th, index) => {
+                            if (settings.columnWidths[`col_${index}`]) {
+                                th.style.width = `${settings.columnWidths[`col_${index}`]}px`;
+                            }
+                        });
+                    }
+                    if (settings.rowHeights) {
+                        document.querySelectorAll('table tr').forEach((tr, index) => {
+                            if (settings.rowHeights[`row_${index}`]) {
+                                tr.style.height = `${settings.rowHeights[`row_${index}`]}px`;
+                            }
+                        });
+                    }
+                }
+                updateCustomSettings();
+                initializeEggPetTable(hiddenGens);
+            } catch (error) {
+                console.error('Lỗi trong loadCustomSettings:', error);
+                alert('Đã xảy ra lỗi khi tải tùy chỉnh giao diện. Vui lòng thử lại!');
+            }
+        }
+
+        function updateCustomSettings() {
+            try {
+                const fontSize = document.getElementById('fontSizeSelect').value;
+                const tablePadding = document.getElementById('tablePaddingSelect').value;
+                const arrowSize = document.getElementById('arrowSizeSelect').value;
+                const inputWidth = document.getElementById('inputWidthSelect').value;
+                const uppercaseText = document.getElementById('uppercaseText').checked;
+                const layout = document.getElementById('layoutSelect').value;
+                const showArrows = document.getElementById('showArrows').checked;
+                const resizeColumns = document.getElementById('resizeColumns').checked;
+                const resizeRows = document.getElementById('resizeRows').checked;
+
+                const hiddenGens = [];
+                for (let i = 1; i <= 10; i++) {
+                    if (document.getElementById(`hideGen${i}`).checked) {
+                        hiddenGens.push(i);
+                    }
+                }
+
+                document.body.className = `font-size-${fontSize} layout-${layout}${uppercaseText ? ' uppercase-text' : ''}`;
+
+                document.getElementById('fontSizeValue').textContent = `${fontSize}px`;
+                document.getElementById('tablePaddingValue').textContent = `${tablePadding}px`;
+                document.getElementById('arrowSizeValue').textContent = `${arrowSize}px`;
+                document.getElementById('inputWidthValue').textContent = `${inputWidth}px`;
+
+                const tables = document.querySelectorAll('table');
+                tables.forEach(table => {
+                    table.className = `table-padding-${tablePadding}`;
+                });
+
+                const numberInputs = document.querySelectorAll('input[type="number"]');
+                numberInputs.forEach(input => {
+                    input.className = `input-width-${inputWidth} ${showArrows ? `arrow-size-${arrowSize}` : 'no-arrows'}`;
+                });
+
+                const thElements = document.querySelectorAll('table th');
+                thElements.forEach(th => {
+                    th.className = th.className.replace(/resize-column|no-resize-column/g, '') + (resizeColumns ? ' resize-column' : ' no-resize-column');
+                });
+
+                const rowElements = document.querySelectorAll('table tr');
+                rowElements.forEach(tr => {
+                    tr.className = tr.className.replace(/resize-row|no-resize-row/g, '') + (resizeRows ? ' resize-row' : ' no-resize-row');
+                });
+
+                initializeEggPetTable(hiddenGens);
+                toggleGen0Column();
+                togglePredictionColumns();
+                toggleQualityColumns();
+                setupRowResizing();
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong updateCustomSettings:', error);
+                alert('Đã xảy ra lỗi khi cập nhật tùy chỉnh giao diện. Vui lòng thử lại!');
+            }
+        }
+
+        function setupRowResizing() {
+            const resizeRows = document.getElementById('resizeRows').checked;
+            const rows = document.querySelectorAll('.resize-row .resize-handle-row');
+            rows.forEach(handle => {
+                handle.onmousedown = function(e) {
+                    if (!resizeRows) return;
+                    const row = handle.parentElement;
+                    const startY = e.clientY;
+                    const startHeight = parseInt(row.style.height || '40', 10);
+                    function onMouseMove(e) {
+                        const newHeight = Math.max(40, startHeight + (e.clientY - startY));
+                        row.style.height = `${newHeight}px`;
+                    }
+                    function onMouseUp() {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                        saveCustomSettings();
+                    }
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                };
+            });
+        }
+
+        function updateStats() {
+            try {
+                const gen0_SR = pets.filter(p => p.gen === 0 && p.quality === 'SR').reduce((sum, p) => sum + p.quantity, 0);
+                const gen0_SSR = pets.filter(p => p.gen === 0 && p.quality === 'SSR').reduce((sum, p) => sum + p.quantity, 0);
+                const total_SR_male = pets.filter(p => p.quality === 'SR' && p.gender === 'Đực').reduce((sum, p) => sum + p.quantity, 0);
+                const total_SR_female = pets.filter(p => p.quality === 'SR' && p.gender === 'Cái').reduce((sum, p) => sum + p.quantity, 0);
+                const total_SSR_male = pets.filter(p => p.quality === 'SSR' && p.gender === 'Đực').reduce((sum, p) => sum + p.quantity, 0);
+                const total_SSR_female = pets.filter(p => p.quality === 'SSR' && p.gender === 'Cái').reduce((sum, p) => sum + p.quantity, 0);
+                const total_SR = total_SR_male + total_SR_female;
+                const total_SSR = total_SSR_male + total_SSR_female;
+                const total_male = total_SR_male + total_SSR_male;
+                const total_female = total_SR_female + total_SSR_female;
+                const total_all = total_male + total_female;
+                const gen0_total = gen0_SR + gen0_SSR;
+
+                document.getElementById('gen0_SR').textContent = gen0_SR;
+                document.getElementById('gen0_SSR').textContent = gen0_SSR;
+                document.getElementById('gen0_total').textContent = gen0_total;
+                document.getElementById('total_SR_male').textContent = total_SR_male;
+                document.getElementById('total_SR_female').textContent = total_SR_female;
+                document.getElementById('total_SSR_male').textContent = total_SSR_male;
+                document.getElementById('total_SSR_female').textContent = total_SSR_female;
+                document.getElementById('total_SR').textContent = total_SR;
+                document.getElementById('total_SSR').textContent = total_SSR;
+                document.getElementById('total_male').textContent = total_male;
+                document.getElementById('total_female').textContent = total_female;
+                document.getElementById('total_all').textContent = total_all;
+
+                const sr_comparison = total_SR_male > total_SR_female ? 'Đực nhiều hơn' : total_SR_male < total_SR_female ? 'Cái nhiều hơn' : 'Bằng nhau';
+                const ssr_comparison = total_SSR_male > total_SSR_female ? 'Đực nhiều hơn' : total_SSR_male < total_SSR_female ? 'Cái nhiều hơn' : 'Bằng nhau';
+                const total_comparison = total_male > total_female ? 'Đực nhiều hơn' : total_male < total_female ? 'Cái nhiều hơn' : 'Bằng nhau';
+                const sr_prediction = sr_comparison === 'Đực nhiều hơn' ? 'PET CÁI' : sr_comparison === 'Cái nhiều hơn' ? 'PET ĐỰC' : 'HÊN XUI';
+                const ssr_prediction = ssr_comparison === 'Đực nhiều hơn' ? 'PET CÁI' : ssr_comparison === 'Cái nhiều hơn' ? 'PET ĐỰC' : 'HÊN XUI';
+                const total_prediction = total_comparison === 'Đực nhiều hơn' ? 'PET CÁI' : total_comparison === 'Cái nhiều hơn' ? 'PET ĐỰC' : 'HÊN XUI';
+
+                document.getElementById('total_SR_comparison').textContent = sr_comparison;
+                document.getElementById('total_SSR_comparison').textContent = ssr_comparison;
+                document.getElementById('total_comparison').textContent = total_comparison;
+                document.getElementById('total_SR_comparison').className = total_SR_male > total_SR_female ? 'comparison-male' : total_SR_male < total_SR_female ? 'comparison-female' : 'comparison-equal';
+                document.getElementById('total_SSR_comparison').className = total_SSR_male > total_SSR_female ? 'comparison-male' : total_SSR_male < total_SSR_female ? 'comparison-female' : 'comparison-equal';
+                document.getElementById('total_comparison').className = total_male > total_female ? 'comparison-male' : total_male < total_female ? 'comparison-female' : 'comparison-equal';
+
+                document.getElementById('total_SR_prediction').textContent = sr_prediction;
+                document.getElementById('total_SSR_prediction').textContent = ssr_prediction;
+                document.getElementById('total_prediction').textContent = total_prediction;
+                document.getElementById('total_SR_prediction').className = `prediction-column ${sr_prediction === 'PET ĐỰC' ? 'prediction-male' : sr_prediction === 'PET CÁI' ? 'prediction-female' : 'prediction-equal'}`;
+                document.getElementById('total_SSR_prediction').className = `prediction-column ${ssr_prediction === 'PET ĐỰC' ? 'prediction-male' : ssr_prediction === 'PET CÁI' ? 'prediction-female' : 'prediction-equal'}`;
+                document.getElementById('total_prediction').className = `prediction-column ${total_prediction === 'PET ĐỰC' ? 'prediction-male' : total_prediction === 'PET CÁI' ? 'prediction-female' : 'prediction-equal'}`;
+            } catch (error) {
+                console.error('Lỗi trong updateStats:', error);
+                alert('Đã xảy ra lỗi khi cập nhật thống kê. Vui lòng thử lại!');
+            }
+        }
+
+        function loadPets() {
+            try {
+                const savedPets = localStorage.getItem('pets');
+                if (savedPets) {
+                    const parsedPets = JSON.parse(savedPets);
+                    if (!Array.isArray(parsedPets)) {
+                        throw new Error('Dữ liệu pets trong localStorage không phải mảng');
+                    }
+                    pets.forEach(pet => {
+                        const saved = parsedPets.find(s => s.type === pet.type && s.quality === pet.quality && s.gender === pet.gender && s.gen === pet.gen);
+                        if (saved && typeof saved.quantity === 'number' && saved.quantity >= 0) {
+                            pet.quantity = saved.quantity;
+                        }
+                    });
+                }
+                updateStats();
+            } catch (error) {
+                console.error('Lỗi trong loadPets:', error);
+                alert('Đã xảy ra lỗi khi tải dữ liệu pets từ localStorage: ' + error.message);
+            }
+        }
+
+        function savePets() {
+            try {
+                localStorage.setItem('pets', JSON.stringify(pets));
+                alert('Dữ liệu đã được lưu!');
+            } catch (error) {
+                console.error('Lỗi trong savePets:', error);
+                alert('Đã xảy ra lỗi khi lưu dữ liệu. Vui lòng thử lại!');
+            }
+        }
+
+        function exportToExcel() {
+            try {
+                console.time('exportExcel');
+                if (typeof XLSX === 'undefined') {
+                    alert('Thư viện Excel không tải được. Vui lòng kiểm tra kết nối mạng!');
+                    console.timeEnd('exportExcel');
+                    return;
+                }
+                if (typeof saveAs === 'undefined') {
+                    alert('Thư viện FileSaver không tải được. Vui lòng kiểm tra kết nối mạng!');
+                    console.timeEnd('exportExcel');
+                    return;
+                }
+                if (pets.some(pet => isNaN(pet.quantity) || pet.quantity < 0)) {
+                    alert('Dữ liệu không hợp lệ trong danh sách pet!');
+                    console.timeEnd('exportExcel');
+                    return;
+                }
+                const data = pets.filter(pet => pet.quantity > 0).map(pet => ({
+                    'Phẩm chất': pet.quality,
+                    'Giới tính': pet.gender,
+                    'Gen': pet.gen,
+                    'Số lượng': pet.quantity
+                }));
+                console.log('Số bản ghi xuất:', data.length);
+                const ws = XLSX.utils.json_to_sheet(data, {
+                    header: ['Phẩm chất', 'Giới tính', 'Gen', 'Số lượng']
+                });
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Pets');
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([wbout], { type: 'application/octet-stream' });
+                saveAs(blob, 'PetsData.xlsx');
+                alert('Đã xuất dữ liệu ra file PetsData.xlsx!');
+                console.timeEnd('exportExcel');
+            } catch (error) {
+                console.error('Lỗi trong exportToExcel:', error);
+                alert('Đã xảy ra lỗi khi xuất file Excel: ' + error.message);
+                console.timeEnd('exportExcel');
+            }
+        }
+
+        function importFromExcel(file) {
+            try {
+                if (!file) {
+                    alert('Vui lòng chọn file Excel!');
+                    return;
+                }
+                if (typeof XLSX === 'undefined') {
+                    alert('Thư viện Excel không tải được. Vui lòng kiểm tra kết nối mạng!');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const json = XLSX.utils.sheet_to_json(sheet, { header: ['Phẩm chất', 'Giới tính', 'Gen', 'Số lượng'], skipHeader: false });
+
+                        if (!json.length || !json[0]['Phẩm chất']) {
+                            alert('File Excel không đúng định dạng! Cần có các cột: Phẩm chất, Giới tính, Gen, Số lượng.');
+                            return;
+                        }
+
+                        pets.forEach(pet => pet.quantity = 0);
+                        let valid = true;
+                        json.forEach(row => {
+                            const quality = String(row['Phẩm chất']).trim();
+                            const gender = String(row['Giới tính']).trim();
+                            const gen = parseInt(row['Gen']);
+                            const quantity = parseInt(row['Số lượng']);
+
+                            if (!['SR', 'SSR'].includes(quality) ||
+                                !['Đực', 'Cái'].includes(gender) ||
+                                isNaN(gen) || gen < 0 || gen > 10 ||
+                                isNaN(quantity) || quantity < 0) {
+                                valid = false;
+                                return;
+                            }
+                            const pet = pets.find(p => p.quality === quality && p.gender === gender && p.gen === gen);
+                            if (pet) {
+                                pet.quantity = quantity;
+                            }
+                        });
+
+                        if (!valid) {
+                            alert('Dữ liệu trong file Excel không hợp lệ! Vui lòng kiểm tra định dạng và giá trị.');
+                            return;
+                        }
+
+                        const hiddenGens = [];
+                        for (let i = 1; i <= 10; i++) {
+                            if (document.getElementById(`hideGen${i}`).checked) {
+                                hiddenGens.push(i);
+                            }
+                        }
+                        initializeEggPetTable(hiddenGens);
+                        updateStats();
+                        savePets();
+                        alert('Đã nhập dữ liệu từ file Excel thành công!');
+                    } catch (error) {
+                        console.error('Lỗi trong importFromExcel:', error);
+                        alert('Lỗi khi đọc file Excel: ' + error.message);
+                    }
+                };
+                reader.onerror = function() {
+                    alert('Lỗi khi đọc file. Vui lòng kiểm tra file và thử lại!');
+                };
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                console.error('Lỗi trong importFromExcel:', error);
+                alert('Đã xảy ra lỗi khi nhập file Excel: ' + error.message);
+            }
+        }
+
+        function initializeEggPetTable(hiddenGens = []) {
+            try {
+                const tbody = document.getElementById('eggPetTableBody');
+                tbody.innerHTML = '';
+                const showArrows = document.getElementById('showArrows').checked;
+                const inputWidth = document.getElementById('inputWidthSelect').value;
+                const resizeRows = document.getElementById('resizeRows').checked;
+
+                for (let gen = 0; gen <= 10; gen++) {
+                    const egg_SR_male = pets.find(p => p.type === 'Egg Pet' && p.quality === 'SR' && p.gender === 'Đực' && p.gen === gen)?.quantity || 0;
+                    const egg_SR_female = pets.find(p => p.type === 'Egg Pet' && p.quality === 'SR' && p.gender === 'Cái' && p.gen === gen)?.quantity || 0;
+                    const egg_SSR_male = pets.find(p => p.type === 'Egg Pet' && p.quality === 'SSR' && p.gender === 'Đực' && p.gen === gen)?.quantity || 0;
+                    const egg_SSR_female = pets.find(p => p.type === 'Egg Pet' && p.quality === 'SSR' && p.gender === 'Cái' && p.gen === gen)?.quantity || 0;
+
+                    if (gen !== 0 && hiddenGens.includes(gen)) {
+                        continue;
+                    }
+
+                    const sr_comparison = egg_SR_male > egg_SR_female ? 'Đực nhiều hơn' : egg_SR_male < egg_SR_female ? 'Cái nhiều hơn' : 'Bằng nhau';
+                    const ssr_comparison = egg_SSR_male > egg_SSR_female ? 'Đực nhiều hơn' : egg_SSR_male < egg_SSR_female ? 'Cái nhiều hơn' : 'Bằng nhau';
+                    const sr_class = egg_SR_male > egg_SR_female ? 'comparison-male' : egg_SR_male < egg_SR_female ? 'comparison-female' : 'comparison-equal';
+                    const ssr_class = egg_SSR_male > egg_SSR_female ? 'comparison-male' : egg_SSR_male < egg_SSR_female ? 'comparison-female' : 'comparison-equal';
+
+                    const row = document.createElement('tr');
+                    row.className = resizeRows ? 'resize-row' : 'no-resize-row';
+                    row.innerHTML = `
+                        <td>Gen ${gen}</td>
+                        <td class="sr-column">
+                            <div class="quantity-control">
+                                <button onclick="updatePet('Egg Pet', 'SR', 'Đực', ${gen}, ${egg_SR_male - 1})">−</button>
+                                <input type="number" min="0" value="${egg_SR_male}" class="input-width-${inputWidth} ${showArrows ? 'arrow-size-12' : 'no-arrows'}" onchange="updatePet('Egg Pet', 'SR', 'Đực', ${gen}, this.value)">
+                                <button onclick="updatePet('Egg Pet', 'SR', 'Đực', ${gen}, ${egg_SR_male + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="sr-column">
+                            <div class="quantity-control">
+                                <button onclick="updatePet('Egg Pet', 'SR', 'Cái', ${gen}, ${egg_SR_female - 1})">−</button>
+                                <input type="number" min="0" value="${egg_SR_female}" class="input-width-${inputWidth} ${showArrows ? 'arrow-size-12' : 'no-arrows'}" onchange="updatePet('Egg Pet', 'SR', 'Cái', ${gen}, this.value)">
+                                <button onclick="updatePet('Egg Pet', 'SR', 'Cái', ${gen}, ${egg_SR_female + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="ssr-column">
+                            <div class="quantity-control">
+                                <button onclick="updatePet('Egg Pet', 'SSR', 'Đực', ${gen}, ${egg_SSR_male - 1})">−</button>
+                                <input type="number" min="0" value="${egg_SSR_male}" class="input-width-${inputWidth} ${showArrows ? 'arrow-size-12' : 'no-arrows'}" onchange="updatePet('Egg Pet', 'SSR', 'Đực', ${gen}, this.value)">
+                                <button onclick="updatePet('Egg Pet', 'SSR', 'Đực', ${gen}, ${egg_SSR_male + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="ssr-column">
+                            <div class="quantity-control">
+                                <button onclick="updatePet('Egg Pet', 'SSR', 'Cái', ${gen}, ${egg_SSR_female - 1})">−</button>
+                                <input type="number" min="0" value="${egg_SSR_female}" class="input-width-${inputWidth} ${showArrows ? 'arrow-size-12' : 'no-arrows'}" onchange="updatePet('Egg Pet', 'SSR', 'Cái', ${gen}, this.value)">
+                                <button onclick="updatePet('Egg Pet', 'SSR', 'Cái', ${gen}, ${egg_SSR_female + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="sr-column ${sr_class}">${sr_comparison}</td>
+                        <td class="ssr-column ${ssr_class}">${ssr_comparison}</td>
+                        <div class="resize-handle-row"></div>
+                    `;
+                    tbody.appendChild(row);
+                }
+                toggleQualityColumns();
+                setupRowResizing();
+            } catch (error) {
+                console.error('Lỗi trong initializeEggPetTable:', error);
+                alert('Đã xảy ra lỗi khi khởi tạo bảng Egg Pet. Vui lòng thử lại!');
+            }
+        }
+
+        function updatePet(type, quality, gender, gen, quantity) {
+            try {
+                const pet = pets.find(p => p.type === type && p.quality === quality && p.gender === gender && p.gen === gen);
+                if (pet) {
+                    pet.quantity = Math.max(0, parseInt(quantity) || 0);
+                }
+                const hiddenGens = [];
+                for (let i = 1; i <= 10; i++) {
+                    if (document.getElementById(`hideGen${i}`).checked) {
+                        hiddenGens.push(i);
+                    }
+                }
+                initializeEggPetTable(hiddenGens);
+                updateStats();
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong updatePet:', error);
+                alert('Đã xảy ra lỗi khi cập nhật pet. Vui lòng thử lại!');
+            }
+        }
+
+        function deletePet() {
+            try {
+                const quality = document.getElementById('delete_quality').value;
+                const gender = document.getElementById('delete_gender').value;
+                const gen = parseInt(document.getElementById('delete_gen').value);
+                const quantity = parseInt(document.getElementById('delete_quantity').value);
+                const pet = pets.find(p => p.type === 'Egg Pet' && p.quality === quality && p.gender === gender && p.gen === gen);
+                if (pet && pet.quantity >= quantity) {
+                    pet.quantity -= quantity;
+                    alert('Đã xóa ' + quantity + ' pet thành công!');
+                } else {
+                    alert('Số lượng pet không đủ để xóa hoặc không tìm thấy pet!');
+                }
+                const hiddenGens = [];
+                for (let i = 1; i <= 10; i++) {
+                    if (document.getElementById(`hideGen${i}`).checked) {
+                        hiddenGens.push(i);
+                    }
+                }
+                initializeEggPetTable(hiddenGens);
+                updateStats();
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong deletePet:', error);
+                alert('Đã xảy ra lỗi khi xóa pet. Vui lòng thử lại!');
+            }
+        }
+
+        function toggleGen0Column() {
+            try {
+                const gen0Columns = document.querySelectorAll('.gen0-column');
+                const isChecked = document.getElementById('toggleGen0').checked;
+                const resizeColumns = document.getElementById('resizeColumns').checked;
+                gen0Columns.forEach(col => {
+                    col.className = isChecked ? `gen0-column ${resizeColumns ? 'resize-column' : 'no-resize-column'}` : `gen0-column gen0-hidden ${resizeColumns ? 'resize-column' : 'no-resize-column'}`;
+                });
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong toggleGen0Column:', error);
+                alert('Đã xảy ra lỗi khi bật/tắt cột Gen 0. Vui lòng thử lại!');
+            }
+        }
+
+        function toggleQualityColumns() {
+            try {
+                const showSREggPet = document.getElementById('toggleSREggPet').checked;
+                const showSSREggPet = document.getElementById('toggleSSREggPet').checked;
+                const resizeColumns = document.getElementById('resizeColumns').checked;
+
+                const eggSRColumns = document.querySelectorAll('#eggGen0To10 .sr-column');
+                const eggSSRColumns = document.querySelectorAll('#eggGen0To10 .ssr-column');
+
+                eggSRColumns.forEach(col => {
+                    col.className = showSREggPet ? `sr-column ${resizeColumns ? 'resize-column' : 'no-resize-column'}` : `sr-column sr-hidden ${resizeColumns ? 'resize-column' : 'no-resize-column'}`;
+                });
+                eggSSRColumns.forEach(col => {
+                    col.className = showSSREggPet ? `ssr-column ${resizeColumns ? 'resize-column' : 'no-resize-column'}` : `ssr-column ssr-hidden ${resizeColumns ? 'resize-column' : 'no-resize-column'}`;
+                });
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong toggleQualityColumns:', error);
+                alert('Đã xảy ra lỗi khi bật/tắt cột SR/SSR. Vui lòng thử lại!');
+            }
+        }
+
+        function togglePredictionColumns() {
+            try {
+                const predictionColumns = document.querySelectorAll('#statsTable .prediction-column');
+                const isChecked = document.getElementById('togglePrediction').checked;
+                const resizeColumns = document.getElementById('resizeColumns').checked;
+                predictionColumns.forEach(col => {
+                    col.className = isChecked ? `prediction-column ${resizeColumns ? 'resize-column' : 'no-resize-column'}` : `prediction-column prediction-hidden ${resizeColumns ? 'resize-column' : 'no-resize-column'}`;
+                });
+                saveCustomSettings();
+            } catch (error) {
+                console.error('Lỗi trong togglePredictionColumns:', error);
+                alert('Đã xảy ra lỗi khi bật/tắt cột dự đoán. Vui lòng thử lại!');
+            }
+        }
+
+        window.onload = function() {
+            try {
+                if (typeof XLSX === 'undefined') {
+                    console.warn('Thư viện XLSX không tải được. Chức năng xuất/nhập Excel sẽ không hoạt động.');
+                    alert('Không thể tải thư viện Excel. Một số tính năng có thể không hoạt động. Vui lòng kiểm tra kết nối mạng!');
+                }
+                if (typeof saveAs === 'undefined') {
+                    console.warn('Thư viện FileSaver không tải được. Chức năng xuất Excel sẽ không hoạt động.');
+                    alert('Không thể tải thư viện FileSaver. Chức năng xuất Excel có thể không hoạt động. Vui lòng kiểm tra kết nối mạng!');
+                }
+                loadPets();
+                loadCustomSettings();
+            } catch (error) {
+                console.error('Lỗi khi tải trang:', error);
+                alert('Đã xảy ra lỗi khi tải trang. Vui lòng thử lại!');
+            }
+        };
+    </script>
+</body>
+</html>
